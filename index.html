@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Liquid Glass vs Lite Timer</title>
+    <style>
+        :root {
+            --bg-color: #05070a;
+            --glass-bg: rgba(255, 255, 255, 0.03);
+            --accent-color: #00d4ff;
+            --break-color: #ff007a;
+            --liquid-gradient: linear-gradient(135deg, #00d4ff 0%, #005f73 100%);
+            --text-color: #ffffff;
+        }
+
+        /* LITE MODE OVERRIDES */
+        body.lite-mode {
+            --bg-color: #0a0a0a;
+            --glass-bg: #1a1a1a;
+        }
+        body.lite-mode .background-blobs, 
+        body.lite-mode svg,
+        body.lite-mode .progress-fill::after {
+            display: none !important; /* Kill heavy animations */
+        }
+        body.lite-mode .container {
+            backdrop-filter: none !important;
+            border: 1px solid #333;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', sans-serif; }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            transition: background 0.3s ease;
+        }
+
+        /* Animated Fluid Background (Liquid Mode) */
+        .background-blobs {
+            position: absolute; width: 100%; height: 100%; z-index: -1; filter: url(#gooey);
+        }
+        .blob {
+            position: absolute; background: var(--liquid-gradient); border-radius: 50%;
+            opacity: 0.3; filter: blur(50px); animation: float 25s infinite alternate;
+        }
+        @keyframes float { 0% { transform: translate(-10%, -10%) scale(1); } 100% { transform: translate(20%, 20%) scale(1.3); } }
+
+        /* Glass Container */
+        .container {
+            width: 90%; max-width: 480px; padding: 50px 40px;
+            background: var(--glass-bg); backdrop-filter: blur(25px) saturate(200%);
+            border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 40px;
+            box-shadow: 0 40px 100px rgba(0,0,0,0.6); text-align: center;
+            z-index: 10;
+        }
+
+        h1 { font-size: 0.8rem; letter-spacing: 5px; margin-bottom: 15px; opacity: 0.4; text-transform: uppercase; }
+        #status { font-size: 1.8rem; font-weight: 700; margin-bottom: 10px; }
+        #timer { font-size: 4.5rem; font-weight: 200; font-variant-numeric: tabular-nums; margin-bottom: 35px; }
+
+        /* Progress Bar */
+        .progress-container {
+            width: 100%; height: 12px; background: rgba(255,255,255,0.05);
+            border-radius: 50px; overflow: hidden; margin-bottom: 30px;
+        }
+        .progress-fill {
+            height: 100%; width: 0%; background: var(--liquid-gradient);
+            transition: width 1s linear; position: relative;
+        }
+        .progress-fill::after {
+            content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
+            animation: sweep 3s infinite;
+        }
+        @keyframes sweep { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
+
+        /* Buttons */
+        .controls { display: flex; gap: 10px; justify-content: center; }
+        .btn {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: white; padding: 12px 20px; border-radius: 100px;
+            cursor: pointer; font-size: 0.8rem; transition: all 0.3s ease;
+        }
+        .btn:hover { background: rgba(255, 255, 255, 0.15); }
+        .btn-lite { border-color: #ffcc00; color: #ffcc00; }
+
+        .is-break { color: var(--break-color) !important; }
+        .bg-break { background: #ff007a !important; }
+
+        #pip-canvas { display: none; }
+        #pip-video { position: absolute; width: 1px; height: 1px; opacity: 0; }
+    </style>
+</head>
+<body>
+
+    <div class="background-blobs">
+        <div class="blob" style="width: 500px; height: 500px; top: -150px; left: -100px;"></div>
+        <div class="blob" style="width: 400px; height: 400px; bottom: -100px; right: -50px; background: #005f73;"></div>
+    </div>
+
+    <svg xmlns="http://www.w3.org/2000/svg" style="display:none;"><defs><filter id="gooey"><feGaussianBlur in="SourceGraphic" stdDeviation="12" result="blur" /><feColorMatrix in="blur" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 19 -9" result="goo" /></filter></defs></svg>
+
+    <div class="container">
+        <h1>Work Session</h1>
+        <div id="status">Active</div>
+        <div id="timer">00:00:00</div>
+        
+        <div class="progress-container">
+            <div class="progress-fill" id="progress"></div>
+        </div>
+
+        <div class="controls">
+            <button class="btn" id="btn-pip">✨ Float Timer</button>
+            <button class="btn btn-lite" id="btn-lite">🚀 Lite Mode</button>
+        </div>
+    </div>
+
+    <canvas id="pip-canvas" width="400" height="200"></canvas>
+    <video id="pip-video" autoplay muted></video>
+
+    <script>
+        const schedule = [
+            { name: "Morning Work", start: "09:30", end: "11:00", isBreak: false },
+            { name: "Chai Break", start: "11:00", end: "11:15", isBreak: true },
+            { name: "Work Session 2", start: "11:15", end: "12:50", isBreak: false },
+            { name: "Lunch Break", start: "12:50", end: "13:30", isBreak: true },
+            { name: "Afternoon Work", start: "13:30", end: "15:00", isBreak: false },
+            { name: "Chai Break", start: "15:00", end: "15:15", isBreak: true },
+            { name: "Final Session", start: "15:15", end: "16:40", isBreak: false }
+        ];
+
+        let liteMode = false;
+        const btnLite = document.getElementById('btn-lite');
+        btnLite.onclick = () => {
+            liteMode = !liteMode;
+            document.body.classList.toggle('lite-mode');
+            btnLite.innerText = liteMode ? "✨ High End" : "🚀 Lite Mode";
+        };
+
+        const canvas = document.getElementById('pip-canvas');
+        const ctx = canvas.getContext('2d');
+        const video = document.getElementById('pip-video');
+        const btnPip = document.getElementById('btn-pip');
+
+        let curStatus = "", curTimer = "", curColor = "#00d4ff";
+
+        function parseTime(timeStr) {
+            const [hrs, mins] = timeStr.split(':').map(Number);
+            const d = new Date();
+            d.setHours(hrs, mins, 0, 0);
+            return d;
+        }
+
+        function update() {
+            const now = new Date();
+            let current = null;
+
+            for (let task of schedule) {
+                const start = parseTime(task.start);
+                const end = parseTime(task.end);
+                if (now >= start && now < end) {
+                    current = { ...task, startTime: start, endTime: end };
+                    break;
+                }
+            }
+
+            const statusEl = document.getElementById('status');
+            const timerEl = document.getElementById('timer');
+            const progressEl = document.getElementById('progress');
+
+            if (current) {
+                const total = current.endTime - current.startTime;
+                const elapsed = now - current.startTime;
+                const remaining = current.endTime - now;
+                const percent = (elapsed / total) * 100;
+
+                const h = Math.floor(remaining / 3600000);
+                const m = Math.floor((remaining % 3600000) / 60000);
+                const s = Math.floor((remaining % 60000) / 1000);
+                
+                curStatus = current.name;
+                curTimer = `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+                curColor = current.isBreak ? "#ff007a" : "#00d4ff";
+
+                statusEl.innerText = curStatus;
+                statusEl.className = current.isBreak ? 'is-break' : '';
+                timerEl.innerText = curTimer;
+                progressEl.style.width = percent + "%";
+                progressEl.className = current.isBreak ? 'progress-fill bg-break' : 'progress-fill';
+            } else {
+                curStatus = "Off Shift";
+                curTimer = "00:00:00";
+                statusEl.innerText = curStatus;
+                timerEl.innerText = curTimer;
+            }
+            drawToCanvas();
+        }
+
+        function drawToCanvas() {
+            ctx.fillStyle = "#111";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = curColor;
+            ctx.font = "bold 28px sans-serif";
+            ctx.textAlign = "center";
+            ctx.fillText(curStatus, 200, 60);
+            ctx.fillStyle = "#fff";
+            ctx.font = "bold 70px monospace";
+            ctx.fillText(curTimer, 200, 150);
+        }
+
+        btnPip.onclick = async () => {
+            try {
+                if (document.pictureInPictureElement) {
+                    await document.exitPictureInPicture();
+                } else {
+                    const stream = canvas.captureStream();
+                    video.srcObject = stream;
+                    video.onloadedmetadata = () => video.requestPictureInPicture();
+                }
+            } catch (e) { alert("Float mode requires browser support (Chrome/Edge/Safari)."); }
+        };
+
+        setInterval(update, 1000);
+        update();
+    </script>
+</body>
+</html>
