@@ -109,12 +109,12 @@
 
         let liteMode = false, isIdle = false, stayActiveLock = false, isVerseMode = false;
         let idleStartTime = null, idleTimerTimeout, currentVerse = "";
-        const IDLE_THRESHOLD = 60000;
+        const IDLE_THRESHOLD = 10000;
 
         // Bible Verse Logic with HTML Tag Removal
         async function fetchVerse() {
             try {
-                const response = await fetch('https://labs.bible.org/api/?passage=random&type=text');
+                const response = await fetch('https://cors.kawiesh.top/https://labs.bible.org/api/?passage=random&type=text');
                 let rawText = await response.text();
                 // CLEAN THE TEXT: Remove <b> and other HTML tags
                 currentVerse = rawText.replace(/<\/?[^>]+(>|$)/g, ""); 
