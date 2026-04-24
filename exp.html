@@ -42,7 +42,7 @@
         }
 
         #status { font-size: 1.2rem; font-weight: 700; margin-bottom: 5px; color: var(--accent-color); }
-        #timer-main { font-size: 4.5rem; font-weight: 200; font-variant-numeric: tabular-nums; line-height: 1; transition: color 0.3s; }
+        #timer-main { font-size: 4.5rem; font-weight: 200; font-variant-numeric: tabular-nums; line-height: 1; transition: color 0.3s ease; }
         #timer-sub { font-size: 1rem; opacity: 0.6; margin-bottom: 25px; min-height: 1.2rem; }
 
         #verse-display { display: none; padding: 10px; }
@@ -63,8 +63,8 @@
         #pip-video { position: absolute; bottom: 0; right: 0; width: 1px; height: 1px; opacity: 0.01; pointer-events: none; }
 
         /* --- MOBILE MODE OVERRIDES --- */
-        body.mobile-mode, body.mobile-mode.is-idle, body.mobile-mode.is-verse {
-            background-color: #000000 !important; /* Pitch black AMOLED */
+        body.mobile-mode {
+            background-color: #000000 !important; /* Pure AMOLED Black */
         }
         body.mobile-mode .background-blobs, 
         body.mobile-mode svg,
@@ -73,7 +73,7 @@
         body.mobile-mode h1,
         body.mobile-mode #status,
         body.mobile-mode #timer-sub {
-            display: none !important; /* Hide distractions */
+            display: none !important; 
         }
         body.mobile-mode .container {
             border: none !important;
@@ -87,10 +87,15 @@
             align-items: center;
             padding: 0;
         }
+        
+        /* Mobile Color Logic */
         body.mobile-mode #timer-main {
-            font-size: 18vw !important; /* Massive text for landscape */
-            color: #404040 !important; /* Dark grey */
-            font-weight: bold;
+            font-size: 22vw !important; 
+            font-weight: 800;
+            color: #00d4ff; /* Default Blue */
+        }
+        body.mobile-mode.is-idle #timer-main {
+            color: #ff3333 !important; /* Red when Idle */
         }
     </style>
 </head>
@@ -143,21 +148,17 @@
         let idleStartTime = null, idleTimerTimeout, currentVerse = "";
         const IDLE_THRESHOLD = 10000;
 
-        // Bible Verse Logic with HTML Tag Removal
         async function fetchVerse() {
             try {
                 const response = await fetch('https://cors.kawiesh.top/https://labs.bible.org/api/?passage=random&type=text');
                 let rawText = await response.text();
-                // CLEAN THE TEXT: Remove <b> and other HTML tags
                 currentVerse = rawText.replace(/<\/?[^>]+(>|$)/g, ""); 
                 showVerse();
             } catch (e) { console.log("Verse fetch failed"); }
         }
 
         function showVerse() {
-            // Prevent verse from taking over if we are in mobile focus mode
             if(document.body.classList.contains('mobile-mode')) return;
-
             isVerseMode = true;
             document.body.classList.add('is-verse');
             document.getElementById('standard-ui').style.display = 'none';
@@ -172,7 +173,6 @@
             }, 30000); 
         }
 
-        // Trigger every 15 mins
         setInterval(() => {
             const now = new Date();
             if (now.getSeconds() === 0 && now.getMinutes() % 15 === 0) {
@@ -188,11 +188,17 @@
         }
 
         function resetActivity() {
-            if (isIdle) { isIdle = false; idleStartTime = null; document.body.classList.remove('is-idle'); }
+            if (isIdle) { 
+                isIdle = false; 
+                idleStartTime = null; 
+                document.body.classList.remove('is-idle'); 
+            }
             clearTimeout(idleTimerTimeout);
             if (!stayActiveLock) {
                 idleTimerTimeout = setTimeout(() => {
-                    isIdle = true; idleStartTime = Date.now(); document.body.classList.add('is-idle');
+                    isIdle = true; 
+                    idleStartTime = Date.now(); 
+                    document.body.classList.add('is-idle');
                 }, IDLE_THRESHOLD);
             }
         }
@@ -210,39 +216,26 @@
             resetActivity();
         };
 
-        // --- NEW: MOBILE MODE LOGIC ---
         document.getElementById('btn-mobile').onclick = async () => {
             try {
                 if (!document.fullscreenElement) {
-                    // Enter Fullscreen
                     await document.documentElement.requestFullscreen();
                     document.body.classList.add('mobile-mode');
-                    
-                    // Attempt to lock to Landscape (Works on Android/Chrome)
                     try {
                         await screen.orientation.lock("landscape");
-                    } catch (err) {
-                        console.log("Orientation lock not supported on this device.", err);
-                    }
+                    } catch (err) { console.log("Orientation lock not supported."); }
                 } else {
-                    // Exit Fullscreen (this triggers the fullscreenchange event to clean up)
                     await document.exitFullscreen();
                 }
             } catch (err) {
-                console.error("Fullscreen failed:", err);
-                alert("Fullscreen is required for mobile mode.");
+                alert("Fullscreen required for mobile mode.");
             }
         };
 
-        // Listen for when the user naturally exits fullscreen (e.g. swiping down / hitting Esc)
         document.addEventListener('fullscreenchange', () => {
             if (!document.fullscreenElement) {
                 document.body.classList.remove('mobile-mode');
-                try {
-                    screen.orientation.unlock();
-                } catch (err) {
-                    // Ignore unlock errors
-                }
+                try { screen.orientation.unlock(); } catch (err) {}
             }
         });
 
@@ -293,11 +286,6 @@
                 ctx.fillStyle = "#fff";
                 ctx.font = "bold 80px monospace";
                 ctx.fillText(document.getElementById('timer-main').innerText, 250, 150);
-                if (task) {
-                    ctx.font = "20px sans-serif";
-                    ctx.fillStyle = "rgba(255,255,255,0.5)";
-                    ctx.fillText("Remaining: " + formatTime(task.end - Date.now()), 250, 230);
-                }
             }
         }
 
@@ -315,7 +303,6 @@
             context.fillText(line, x, y);
         }
 
-        // IMPROVED PIP TRIGGER
         document.getElementById('btn-pip').onclick = async () => {
             const video = document.getElementById('pip-video');
             const canvas = document.getElementById('pip-canvas');
@@ -325,14 +312,10 @@
                 } else {
                     const stream = canvas.captureStream(10);
                     video.srcObject = stream;
-                    // Play is required before requesting PiP
                     await video.play();
                     await video.requestPictureInPicture();
                 }
-            } catch (e) { 
-                console.error(e);
-                alert("PiP failed. Ensure you are using Chrome/Edge and clicking the button manually."); 
-            }
+            } catch (e) { alert("PiP failed."); }
         };
 
         setInterval(update, 1000);
