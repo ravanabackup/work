@@ -58,14 +58,11 @@
         }
         .active-lock { border-color: #00ff88; color: #00ff88; }
 
-        /* PIP FIX: Video must exist but be practically invisible */
         #pip-canvas { display: none; }
         #pip-video { position: absolute; bottom: 0; right: 0; width: 1px; height: 1px; opacity: 0.01; pointer-events: none; }
 
         /* --- MOBILE MODE OVERRIDES --- */
-        body.mobile-mode {
-            background-color: #000000 !important; /* Pure AMOLED Black */
-        }
+        body.mobile-mode { background-color: #000000 !important; }
         body.mobile-mode .background-blobs, 
         body.mobile-mode svg,
         body.mobile-mode .controls,
@@ -88,14 +85,13 @@
             padding: 0;
         }
         
-        /* Mobile Color Logic */
         body.mobile-mode #timer-main {
             font-size: 22vw !important; 
             font-weight: 800;
-            color: #00d4ff; /* Default Blue */
+            color: #00d4ff; 
         }
         body.mobile-mode.is-idle #timer-main {
-            color: #ff3333 !important; /* Red when Idle */
+            color: #ff3333 !important; 
         }
     </style>
 </head>
@@ -147,6 +143,9 @@
         let liteMode = false, isIdle = false, stayActiveLock = false, isVerseMode = false;
         let idleStartTime = null, idleTimerTimeout, currentVerse = "";
         const IDLE_THRESHOLD = 10000;
+        
+        // Wake Lock variable
+        let wakeLock = null;
 
         async function fetchVerse() {
             try {
@@ -205,6 +204,26 @@
 
         ['mousemove', 'mousedown', 'keydown', 'touchstart'].forEach(evt => window.addEventListener(evt, resetActivity, true));
 
+        // Screen Wake Lock Logic
+        async function requestWakeLock() {
+            try {
+                if ('wakeLock' in navigator) {
+                    wakeLock = await navigator.wakeLock.request('screen');
+                    console.log("Wake Lock is active!");
+                }
+            } catch (err) {
+                console.error(`${err.name}, ${err.message}`);
+            }
+        }
+
+        function releaseWakeLock() {
+            if (wakeLock !== null) {
+                wakeLock.release();
+                wakeLock = null;
+                console.log("Wake Lock released.");
+            }
+        }
+
         document.getElementById('btn-lite').onclick = () => {
             liteMode = !liteMode;
             document.body.classList.toggle('lite-mode');
@@ -221,6 +240,7 @@
                 if (!document.fullscreenElement) {
                     await document.documentElement.requestFullscreen();
                     document.body.classList.add('mobile-mode');
+                    await requestWakeLock(); // Keep screen on in Mobile Mode
                     try {
                         await screen.orientation.lock("landscape");
                     } catch (err) { console.log("Orientation lock not supported."); }
@@ -235,6 +255,7 @@
         document.addEventListener('fullscreenchange', () => {
             if (!document.fullscreenElement) {
                 document.body.classList.remove('mobile-mode');
+                releaseWakeLock(); // Allow screen to dim when exiting Mobile Mode
                 try { screen.orientation.unlock(); } catch (err) {}
             }
         });
